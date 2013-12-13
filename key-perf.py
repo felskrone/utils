@@ -72,7 +72,7 @@ class Bob(PrivPubTest):
 if __name__ == '__main__':
 
     bits = int(sys.argv[1])
-    loops = sys.argv[2]
+    loops = int(sys.argv[2])
 
     print ""
     alice = Alice(bits)
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     # create encoded message for bob
     msg = alice.create_enc_msg("test fusel", 'Bob')
     print "keys:{0}  loops:{1}".format(bits, loops)
-    for i in range(5000):
+    for i in range(loops):
         print i,
         sys.stdout.flush()
         bob.decrypt_msg(msg)
