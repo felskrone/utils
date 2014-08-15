@@ -1,5 +1,7 @@
 #!/usr/bin/python
 '''
+Author: Volker Schwicking, vs@heg.com
+
 Salt tcpdumper to visualize whats happening network-wise on
 the salt-master. It uses pcapy and inspects all incoming networks
 packets and filters only the ones relevant to salt-communication.
