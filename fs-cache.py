@@ -124,17 +124,19 @@ if __name__ == '__main__':
     # consume the queues, that would be the MWorker using 
     # the cached data from the updater which is a zillion
     # times faster then doing it on the fs
+    itera = 0
     try:
         while 1:
             try:
                 values = queue.get(block=False)
                 if values is not None:
-                    print "############"
+                    print "<{0} ############".format(itera)
                     for key, value in values.items():
                         print key, len(value)
-                    print "############"
+                    print "{0}> ############\n".format(itera)
             except Queue.Empty:
                 continue
+            itera += 1
             time.sleep(0.1)
 
     except KeyboardInterrupt:
