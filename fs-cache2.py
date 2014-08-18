@@ -1,11 +1,6 @@
 #!/usr/bin/python
 '''
-The FSWalker-Class walks takes a path, a pattern and an interval. It then
-traverses the given path in the given interval and filters files by the
-given pattern.
-
-While running, it continuesly updates a dict with all found files and
-their data for which it can be queried for on demand.
+Classes for caching files and their data to reduce i/o.
 '''
 import salt.utils
 import time
@@ -21,7 +16,7 @@ import sys
 class Statwalker(object):
     '''
     iterator class that walks through directory and
-    collects the stat()-data for every file find
+    collects the stat()-data for every file it finds
     '''
 
     def __init__(self, directory):
@@ -58,9 +53,9 @@ class Statwalker(object):
 
 class Job(multiprocessing.Process):
     '''
-    Runs through a given directory and searches for files with the given pattern.
+    Runs through a given directory once and searches for files with the given pattern.
     If the pattern matches, reads the file and adds the data to a dictionary which
-    is returned to the caller once done.
+    is returned to the caller once done. It then exits.
     '''
 
     def __init__(self, name, res_q, **kwargs):
@@ -99,7 +94,8 @@ class Job(multiprocessing.Process):
 
 class FSWalker(multiprocessing.Process):
     '''
-    A class to walk a given path and collect information in subprocesses
+    A manager-clas that spawns subprocess that walk through a given path to
+    collect files and their data to put them into cache
     '''
     # all jobs the FSWalker should run in intervals
     jobs = {}
@@ -201,9 +197,10 @@ class FSWalker(multiprocessing.Process):
 
 
 if __name__ == '__main__':
-
+    # the communication queues for querying the FSWalkers cache
     p_queue = multiprocessing.Queue()
     g_queue = multiprocessing.Queue()
+
     wlk = FSWalker(in_q=p_queue, out_q=g_queue)
     grains_path = '/var/cache/salt/master/minions/'
     mine_path = '/var/cache/salt/master/minions/'
