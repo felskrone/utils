@@ -180,7 +180,7 @@ class FSWalker(multiprocessing.Process):
 
 
             # make sure all workers are joined properly and
-            # remove them is the are done with their job
+            # remove them if they are done with their job
             for worker in enumerate(self.workers):
                 if worker[1].is_alive():
                     continue
