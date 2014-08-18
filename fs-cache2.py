@@ -15,6 +15,8 @@ import Queue
 import os
 import stat
 from re import match as rematch
+import random
+import sys
 
 class Statwalker(object):
     '''
@@ -31,7 +33,9 @@ class Statwalker(object):
         '''
         make it iterable
         '''
+        count = 0
         while 1:
+
             try:
                 fn = self.files[self.index]
                 self.index = self.index + 1
@@ -78,15 +82,17 @@ class Job(multiprocessing.Process):
         main loop that searches directories and retrieves the data
         '''
         data = {}
+        dir_n = os.path.dirname
         if self.verify():
-            print "running in dir {0}".format(self.path)
+            print "WORKER:  running in dir {0}".format(self.path)
             for fn, _ in Statwalker(self.path):
                 # add a few more checks data:
                 # - dont open empty files
                 # - what to add to the dict for empty files?
                 if rematch(self.pattern, fn):
                     data[fn] = {}
-                    data[fn] = salt.utils.fopen(fn, 'rb').read()
+                    data[fn] = 'test'
+                    #data[fn] = salt.utils.fopen(fn, 'rb').read()
             # send the data back to the caller
             self.queue.put({self.name: data})
 
@@ -104,8 +110,11 @@ class FSWalker(multiprocessing.Process):
     # the queue the subprocess write their results into
     result_q = multiprocessing.Queue()
 
-    def __init__(self):
+    def __init__(self, in_q=None, out_q=None):
         super(FSWalker, self).__init__()
+        # the FSWalker communication queues
+        self.in_queue = in_q
+        self.out_queue = out_q
 
     def add_job(self, **kwargs):
         '''
@@ -121,7 +130,6 @@ class FSWalker(multiprocessing.Process):
         del kwargs['name']
         self.jobs[job_name] = {}
         self.jobs[job_name].update(kwargs)
-        print self.jobs
 
     def run_job(self, name):
         '''
@@ -138,7 +146,7 @@ class FSWalker(multiprocessing.Process):
         '''
         timer = 1
         while timer > -1:
-            print "timer: {0}   workers: {1}".format(timer, self.workers)
+#            print "timer: {0}   workers: {1}".format(timer, self.workers)
 
             # loop through the jobs and start if a jobs ival matches
             for item in self.jobs:
@@ -151,8 +159,25 @@ class FSWalker(multiprocessing.Process):
             except Queue.Empty:
                 pass
 
+            # check if someone asked for data
+            try:
+               req = self.in_queue.get(block=False)
+               if isinstance(req, dict):
+                   # for now only one item is assumed
+                   type_n, file_n = req.items()[0]
+                   print "CACHE:  looking for {0}:{1}".format(type_n, file_n)
+
+                   dir_data = self.path_data.get(type_n, False)
+
+                   if dir_data is not None:
+                       f_data = self.path_data[type_n].get(file_n, None)
+                       self.out_queue.put(f_data)
+                       
+            except Queue.Empty:
+                pass
+
             # print what is currently cached
-            print "Files in Cache:",
+            print "CACHE:  Files in Cache:",
             for data in self.path_data:
                 print "{0}:{1} ".format(data, len(self.path_data[data])),
             print ""
@@ -177,8 +202,14 @@ class FSWalker(multiprocessing.Process):
 
 if __name__ == '__main__':
 
-    wlk = FSWalker()
+    p_queue = multiprocessing.Queue()
+    g_queue = multiprocessing.Queue()
+    wlk = FSWalker(in_q=p_queue, out_q=g_queue)
+    grains_path = '/var/cache/salt/master/minions/'
+    mine_path = '/var/cache/salt/master/minions/'
+    minion = sys.argv[1]
 
+    # add two jobs for mine and grains data
     wlk.add_job(**{
                     'name': 'grains',
                     'path': '/var/cache/salt/master/minions',
@@ -189,14 +220,23 @@ if __name__ == '__main__':
     wlk.add_job(**{
                     'name': 'mine',
                     'path': '/var/cache/salt/master/minions',
-                    'ival': [6,16,26,36,46,56],
+                    'ival': [4,14,24,34,44,54],
                     'patt': '^.*/mine.p$'
-                  })
+                 })
 
     wlk.start()
 
-    itera = 0
+    counter = 0
     try:
+        print "MAIN:  main: waiting 5 seconds for cache to populate..."
+        time.sleep(5)
+        # ask the cache for grains data
+        print "MAIN:  query cache with grains for host {0}".format(sys.argv[1])
+        p_queue.put({'grains': grains_path + minion + '/data.p'})
+        try:
+            print "MAIN: cache reply: {0} ".format(g_queue.get())
+        except Queue.Empty:
+            pass
         while 1:
             time.sleep(0.5)
 
