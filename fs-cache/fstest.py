@@ -36,6 +36,13 @@ class Argparser(object):
                                       required=False,
                                       help='the number of runs to execute')
 
+        self.main_parser.add_argument('-t',
+                                      type=str,
+                                      default='zmq',
+                                      dest='type',
+                                      required=False,
+                                      help='wether to run the tests on cache or filesystem')
+
     def parse_args(self):
         return self.main_parser.parse_args()
 
@@ -45,10 +52,11 @@ class FSCacheTest(object):
     run different tests for the FSCache
     '''
 
-    def __init__(self, opts, runs=1):
+    def __init__(self, opts, runs=1, type='cache'):
         self.opts = opts
         self.runs = runs
         self.serial = salt.payload.Serial("msgpack")
+        self.type = type
 
         # the cache timeout in ms * 5 is the max time we allow
         # the cache to take to reply to the request
@@ -147,6 +155,21 @@ class FSCacheTest(object):
                 print "MAIN:  cache was too slow, breaking\n"
                 break
 
+    def do_fs_req(self, path):
+        '''
+        open a single file from disk and read its data
+        '''
+        try:
+            fhandle = open(path, 'rb')
+            data = fhandle.read()
+            #print data
+            self.stats['hits'] += 1
+            self.stats['bytes'] += sys.getsizeof(data)
+            fhandle.close()
+        except IOError:
+            self.stats['misses'] += 1
+            return
+
     def load_random(self):
         '''
         load filenames randomly from a filelist
@@ -166,14 +189,33 @@ class FSCacheTest(object):
         print "MAIN/{0}:  loaded {1} paths-strings".format(self.stats['runs'],
                                                            len(self.files))
 
-    def do_random(self, num):
+    def do_random(self, num, cache=True):
         '''
         do cache requests with random paths
         '''
         count = 0
         t_start = time.time()
         for file_n in self.files[:num]:
-            self.do_cache_req(file_n)
+            if not cache:
+                self.do_fs_req(file_n)
+            else:
+                self.do_cache_req(file_n)
+            count += 1
+
+        t_stop = time.time()
+        t_delta = t_stop - t_start
+
+        print "MAIN/{0}:  did {1} requests in: {2}".format(self.stats['runs'],
+                                                           count,
+                                                           t_delta)
+        return t_delta
+
+
+    def do_fs(self, num):
+
+        count = 0
+        t_start = time.time()
+        for file_n in self.files[:num]:
             count += 1
 
         t_stop = time.time()
@@ -198,8 +240,15 @@ class FSCacheTest(object):
     def run(self):
         for _ in range(self.runs):
             self.load_random()
-            self.stats['avg_100'] += self.do_random(100)
-            self.stats['avg_1000'] += self.do_random(1000)
+
+            if self.type == 'cache':
+                self.stats['avg_100'] += self.do_random(100)
+                self.stats['avg_1000'] += self.do_random(1000)
+            elif self.type == 'fs':
+                self.stats['avg_100'] += self.do_random(100, cache=False)
+                self.stats['avg_1000'] += self.do_random(1000, cache=False)
+            else:
+                print "unknown test type"
             print "MAIN:  wait 3 seconds...\n"
             self.stats['runs'] += 1
             time.sleep(3)
@@ -212,4 +261,4 @@ if __name__ == '__main__':
 
     # let the things settle and the cache
     # populate before we enter the loop
-    test = FSCacheTest(opts, args['runs']).run()
+    test = FSCacheTest(opts, args['runs'], args['type']).run()
