@@ -210,6 +210,27 @@ class FSCacheTest(object):
                                                            t_delta)
         return t_delta
 
+    def loop_reqs(self, cache=True):
+        timeframe = 30
+        t_start = int(time.time())
+
+        count = 0
+
+        while True:
+            for file_n in self.files:
+                if not cache:
+                    self.do_fs_req(file_n)
+                else:
+                    self.do_cache_req(file_n)
+                count += 1
+            t_stop = int(time.time())
+            if t_stop  >= t_start+timeframe:
+                break
+        print "MAIN/{0}:  did {1} requests in: {2}".format(self.stats['runs'],
+                                                           count,
+                                                           timeframe)
+
+        return count 
 
     def do_fs(self, num):
 
@@ -227,14 +248,18 @@ class FSCacheTest(object):
         return t_delta
 
     def pstats(self):
-        print "Summary for {0} runs".format(self.stats['runs'])
+        print "Summary for {0} runs and test-type '{1}'".format(self.stats['runs'],
+                                                             self.type)
         print "Requests: {0},  Hits: {1},  Misses: {2}".format(self.stats['req_total'],
                                                                self.stats['hits'],
                                                                self.stats['misses'])
-
-        print "avg/100: {0},  avg/1000: {1},  bytes: {2}".format(self.stats['avg_100'] / self.stats['runs'],
-                                                                 self.stats['avg_1000'] / self.stats['runs'],
-                                                                 self.stats['bytes'])
+        if self.type == 'cached' or self.type == 'fs':
+            print "avg/100: {0},  avg/1000: {1},  bytes: {2}".format(self.stats['avg_100'] / self.stats['runs'],
+                                                                     self.stats['avg_1000'] / self.stats['runs'],
+                                                                     self.stats['bytes'])
+        elif self.type == 'timed':
+            print "timeframe: 30s  reqs: {0}/s bytes: {1}".format(self.stats['req_total'] / 30,
+                                                                  self.stats['bytes'])
         print ""
 
     def run(self):
@@ -247,6 +272,8 @@ class FSCacheTest(object):
             elif self.type == 'fs':
                 self.stats['avg_100'] += self.do_random(100, cache=False)
                 self.stats['avg_1000'] += self.do_random(1000, cache=False)
+            elif self.type == 'timed':
+                self.loop_reqs()
             else:
                 print "unknown test type"
                 sys.exit(1)
@@ -262,4 +289,6 @@ if __name__ == '__main__':
 
     # let the things settle and the cache
     # populate before we enter the loop
-    test = FSCacheTest(opts, args['runs'], args['type']).run()
+    import trace
+    test = FSCacheTest(opts, args['runs'], args['type'])
+    test.run()
