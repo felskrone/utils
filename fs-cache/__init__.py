@@ -12,6 +12,8 @@ import zmq
 from fsworker import FSWorker
 from threading import Thread, Timer, Event
 
+DEBUG = False
+
 
 class FSTimer(Thread):
     '''
@@ -134,20 +136,23 @@ class FSCache(multiprocessing.Process):
             # check for next cache-request
             if socks.get(creq_in) == zmq.POLLIN:
                 msg = self.serial.loads(creq_in.recv())
-                print "FSCACHE:  request {0}".format(msg)
+                if DEBUG:
+                    print "FSCACHE:  request {0}".format(msg)
 
                 # we only accept requests as lists [req_id, <path>]
                 if isinstance(msg, list):
                     # for now only one item is assumed to be requested
                     msgid, file_n = msg[:]
-                    print "FSCACHE:  looking for {0}:{1}".format(msgid, file_n)
+                    if DEBUG:
+                        print "FSCACHE:  looking for {0}:{1}".format(msgid, file_n)
 
                     fdata = self.path_data.get(file_n, None)
 
-                    if fdata is not None:
-                        print "FSCACHE:  hit"
-                    else:
-                        print "FSCACHE:  miss"
+                    if DEBUG:
+                        if fdata is not None:
+                            print "FSCACHE:  hit"
+                        else:
+                            print "FSCACHE:  miss"
 
 #                        randsleep = random.randint(0,3)
 #                        time.sleep(randsleep)
@@ -168,7 +173,8 @@ class FSCache(multiprocessing.Process):
 
                 # check if the returned data is usable
                 if not isinstance(new_c_data, dict):
-                    print "FSCACHE:  got unusable worker result"
+                    if DEBUG:
+                        print "FSCACHE:  got unusable worker result"
                     del new_c_data
                     continue
 
@@ -179,18 +185,23 @@ class FSCache(multiprocessing.Process):
                 # 4. anything else is considered malformed
 
                 if len(new_c_data) == 0:
-                    print "FSCACHE:  got empty update from worker:"
+                    if DEBUG:
+                        print "FSCACHE:  got empty update from worker:"
                 elif new_c_data.values()[0] is not None:
-                    print "FSCACHE:  got cache update: {0}".format(len(new_c_data))
+                    if DEBUG:
+                        print "FSCACHE:  got cache update: {0}".format(len(new_c_data))
                     self.path_data.update(new_c_data)
                 else:
-                    print "FSCACHE:  got malformed result dict from worker"
-                print "FSCACHE:  {0} entries".format(len(self.path_data))
+                    if DEBUG:
+                        print "FSCACHE:  got malformed result dict from worker"
+                if DEBUG:
+                    print "FSCACHE:  {0} entries".format(len(self.path_data))
 
             # check for next timer-event to start new jobs
             elif socks.get(timer_in) == zmq.POLLIN:
                 sec_event = self.serial.loads(timer_in.recv())
-                print "FSCACHE:  event: #{0}".format(sec_event)
+                if DEBUG:
+                    print "FSCACHE:  event: #{0}".format(sec_event)
 
                 # loop through the jobs and start if a jobs ival matches
                 for item in self.jobs:
@@ -210,7 +221,7 @@ if __name__ == '__main__':
                     'name': 'grains',
                     'path': '/var/cache/salt/master/minions',
                     'ival': [2,12,22],
-                    'patt': '^.*/data.p$'
+                    'patt': '^.*$'
                   })
 
     wlk.add_job(**{
