@@ -38,7 +38,7 @@ class Argparser(object):
 
         self.main_parser.add_argument('-t',
                                       type=str,
-                                      default='zmq',
+                                      default='cache',
                                       dest='type',
                                       required=False,
                                       help='wether to run the tests on cache or filesystem')
@@ -249,6 +249,7 @@ class FSCacheTest(object):
                 self.stats['avg_1000'] += self.do_random(1000, cache=False)
             else:
                 print "unknown test type"
+                sys.exit(1)
             print "MAIN:  wait 3 seconds...\n"
             self.stats['runs'] += 1
             time.sleep(3)
