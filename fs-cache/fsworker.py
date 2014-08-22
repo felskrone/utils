@@ -80,7 +80,7 @@ class FSWorker(multiprocessing.Process):
         self.path = kwargs.get('path', None)
         self.pattern = kwargs.get('patt', None)
         self.opts = opts
-        self.serial = salt.payload.Serial('msgpack')
+        self.serial = salt.payload.Serial(self.opts.get('serial', ''))
         self.set_nice()
 
     def set_nice(self):
@@ -146,8 +146,7 @@ if __name__ == '__main__':
 
     poller = zmq.Poller()
     poller.register(cupd_in, zmq.POLLIN)
-    serial = salt.payload.Serial('msgpack')
-
+    serial = salt.payload.Serial(self.opts.get('serial', ''))
     fsw = FSWorker(**{'path': '/tmp', 'patt': '.*'})
     fsw.start()
 

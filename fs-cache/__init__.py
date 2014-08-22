@@ -19,11 +19,12 @@ class FSTimer(Thread):
     '''
     A basic timer class the fires timer-events every second.
     '''
-    def __init__(self, event):
+    def __init__(self, opts, event):
         Thread.__init__(self)
+        self.opts = opts
         self.stopped = event
         self.daemon = True
-        self.serial = salt.payload.Serial('msgpack')
+        self.serial = salt.payload.Serial(opts.get('serial', ''))
 
     def run(self):
         '''
@@ -70,7 +71,7 @@ class FSCache(multiprocessing.Process):
         # to make the cache system most responsive, we do not use a loop-
         # delay which makes it hard to get 1-second intervals without a timer
         self.timer_stop = Event()
-        self.timer = FSTimer(self.timer_stop)
+        self.timer = FSTimer(self.opts, self.timer_stop)
         self.timer.start()
 
     def add_job(self, **kwargs):
@@ -122,7 +123,7 @@ class FSCache(multiprocessing.Process):
         poller.register(timer_in, zmq.POLLIN)
 
         # our serializer
-        serial = salt.payload.Serial("msgpack")
+        serial = salt.payload.Serial(self.opts.get('serial', ''))
 
         while True:
 
