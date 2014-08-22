@@ -11,6 +11,7 @@ import sys
 import zmq
 from fsworker import FSWorker
 from threading import Thread, Timer, Event
+import signal
 
 DEBUG = False
 
@@ -73,6 +74,13 @@ class FSCache(multiprocessing.Process):
         self.timer_stop = Event()
         self.timer = FSTimer(self.opts, self.timer_stop)
         self.timer.start()
+        self.running = True
+
+    def signal_handler(self, sig, frame):
+        '''
+        handle signals and shutdown
+        '''
+        self.stop()
 
     def add_job(self, **kwargs):
         '''
@@ -95,6 +103,16 @@ class FSCache(multiprocessing.Process):
         '''
         sub_p = FSWorker(self.opts, name, **self.jobs[name])
         sub_p.start()
+
+    def stop(self):
+        '''
+        shutdown cache process
+        '''
+        # avoid getting called twice
+        if self.running:
+            self.running = False
+            self.timer_stop.set()
+            self.timer.join()
 
     def run(self):
         '''
@@ -125,10 +143,20 @@ class FSCache(multiprocessing.Process):
         # our serializer
         serial = salt.payload.Serial(self.opts.get('serial', ''))
 
-        while True:
+        # register a signal handler
+        signal.signal(signal.SIGINT, self.signal_handler)
 
-            # we check every 10ms for new events on any socket
-            socks = dict(poller.poll())
+        print "FSCACHE/{0}: started".format(self.pid)
+
+        while self.running:
+
+            # we check for new events with the poller
+            try:
+                socks = dict(poller.poll())
+            except KeyboardInterrupt:
+                self.stop()
+            except zmq.ZMQError as t:
+                self.stop()
 
             # check for next cache-request
             if socks.get(creq_in) == zmq.POLLIN:
@@ -199,6 +227,7 @@ class FSCache(multiprocessing.Process):
             # check for next timer-event to start new jobs
             elif socks.get(timer_in) == zmq.POLLIN:
                 sec_event = serial.loads(timer_in.recv())
+
                 if DEBUG:
                     print "FSCACHE:  event: #{0}".format(sec_event)
 
@@ -206,6 +235,12 @@ class FSCache(multiprocessing.Process):
                 for item in self.jobs:
                     if sec_event in self.jobs[item]['ival']:
                         self.run_job(item)
+        self.stop()
+        creq_in.close()
+        cupd_in.close()
+        timer_in.close()
+        context.term()
+        print "FSCACHE/{0}:  exiting".format(self.pid)
 
 if __name__ == '__main__':
 
@@ -225,5 +260,5 @@ if __name__ == '__main__':
                     'path': '/var/cache/salt/master/jobs/',
                     'ival': [4,14,24,34,44,54],
                     'patt': '^.*$'
-                 })
+                })
     wlk.start()
