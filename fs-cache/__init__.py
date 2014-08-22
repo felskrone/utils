@@ -92,7 +92,7 @@ class FSCache(multiprocessing.Process):
         '''
         Creates a new subprocess to execute the given job in
         '''
-        sub_p = FSWorker(**self.jobs[name])
+        sub_p = FSWorker(self.opts, name, **self.jobs[name])
         sub_p.start()
 
     def run(self):
