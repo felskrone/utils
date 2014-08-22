@@ -67,18 +67,11 @@ class FSCache(multiprocessing.Process):
         self.path_data = {}
 
         # the timer provides 1-second intervals to the loop in run()
-        # to make the cache system most responsive, we keep the loop-delay
-        # to 0.05s which makes it hard to get 1-second intervals
+        # to make the cache system most responsive, we do not use a loop-
+        # delay which makes it hard to get 1-second intervals without a timer
         self.timer_stop = Event()
         self.timer = FSTimer(self.timer_stop)
         self.timer.start()
-
-        # the delay for the while-loop in run(), keep this as low as
-        # possible to make the cache-system most repsonsive
-        self.loop_delay = 0.05
-
-        # our serializer
-        self.serial = salt.payload.Serial("msgpack")
 
     def add_job(self, **kwargs):
         '''
@@ -97,14 +90,14 @@ class FSCache(multiprocessing.Process):
 
     def run_job(self, name):
         '''
-        creates a new subprocess to execute the given job in
+        Creates a new subprocess to execute the given job in
         '''
         sub_p = FSWorker(**self.jobs[name])
         sub_p.start()
 
     def run(self):
         '''
-        main loop of the FSCache, checks schedule, retrieves result-data
+        Main loop of the FSCache, checks schedule, retrieves result-data
         from the workers and answer requests with data from the cache
         '''
         context = zmq.Context()
@@ -128,14 +121,17 @@ class FSCache(multiprocessing.Process):
         poller.register(cupd_in, zmq.POLLIN)
         poller.register(timer_in, zmq.POLLIN)
 
+        # our serializer
+        serial = salt.payload.Serial("msgpack")
+
         while True:
 
             # we check every 10ms for new events on any socket
-            socks = dict(poller.poll(10))
+            socks = dict(poller.poll())
 
             # check for next cache-request
             if socks.get(creq_in) == zmq.POLLIN:
-                msg = self.serial.loads(creq_in.recv())
+                msg = serial.loads(creq_in.recv())
                 if DEBUG:
                     print "FSCACHE:  request {0}".format(msg)
 
@@ -154,22 +150,24 @@ class FSCache(multiprocessing.Process):
                         else:
                             print "FSCACHE:  miss"
 
-#                        randsleep = random.randint(0,3)
-#                        time.sleep(randsleep)
+                    # simulate slow caches
+                    #randsleep = random.randint(0,3)
+                    #time.sleep(randsleep)
+
                     # Send reply back to client
-                    reply = self.serial.dumps([msgid, fdata])
+                    reply = serial.dumps([msgid, fdata])
                     creq_in.send(reply)
 
                 # wrong format, item not cached
                 else:
-                    reply = self.serial.dumps([msgid, None])
+                    reply = serial.dumps([msgid, None])
                     creq_in.send(reply)
 
             # check for next cache-update from workers
             elif socks.get(cupd_in) == zmq.POLLIN:
-                new_c_data = self.serial.loads(cupd_in.recv())
+                new_c_data = serial.loads(cupd_in.recv())
                 # tell the worker to exit
-                cupd_in.send(self.serial.dumps('OK'))
+                cupd_in.send(serial.dumps('OK'))
 
                 # check if the returned data is usable
                 if not isinstance(new_c_data, dict):
@@ -199,7 +197,7 @@ class FSCache(multiprocessing.Process):
 
             # check for next timer-event to start new jobs
             elif socks.get(timer_in) == zmq.POLLIN:
-                sec_event = self.serial.loads(timer_in.recv())
+                sec_event = serial.loads(timer_in.recv())
                 if DEBUG:
                     print "FSCACHE:  event: #{0}".format(sec_event)
 
@@ -208,12 +206,9 @@ class FSCache(multiprocessing.Process):
                     if sec_event in self.jobs[item]['ival']:
                         self.run_job(item)
 
-            #time.sleep(self.loop_delay)
-
-
 if __name__ == '__main__':
 
-    opts = salt.config.master_config('/etc/salt/master')
+    opts = salt.config.master_config('./master')
 
     wlk = FSCache(opts)
     # add two jobs for jobs and cache-files
