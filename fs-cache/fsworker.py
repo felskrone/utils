@@ -30,7 +30,7 @@ except ImportError:
 
 class Statwalker(object):
     '''
-    iterator class that walks through a directory and
+    Iterator class that walks through a directory and
     collects the stat()-data for every file it finds
     '''
 
@@ -78,17 +78,16 @@ class FSWorker(multiprocessing.Process):
         super(FSWorker, self).__init__()
         self.path = kwargs['path']
         self.pattern = kwargs['patt']
+        self.opts = kwargs.get('opts', None)
         self.serial = salt.payload.Serial('msgpack')
         self.set_nice()
 
     def set_nice(self):
         '''
-        set the ionice-ness very low to harm the
-        disk as little as possible
+        Set the ionice-ness very low to harm the disk as little as possible.
+        Not all systems might have a recent enough psutils-package, but we 
+        try anyway.
         '''
-       
-        # not all systems might have a recent enough psutils-package,
-        # but we try anyway to set it as low as possible
         try:
             self.proc = psutil.Process(os.getpid())
             self.proc.set_ionice(psutil.IOPRIO_CLASS_IDLE)
@@ -97,14 +96,14 @@ class FSWorker(multiprocessing.Process):
 
     def verify(self):
         '''
-        make sure target-path is an actual dir
+        Runs a few tests before executing the worker
         '''
         if os.path.isdir(self.path):
             return True
 
     def run(self):
         '''
-        main loop that searches directories and retrieves the data
+        Main loop that searches directories and retrieves the data
         '''
         # the socket for outgoing cache-update-requests to FSCache
         context = zmq.Context()
