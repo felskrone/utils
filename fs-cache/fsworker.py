@@ -74,11 +74,12 @@ class FSWorker(multiprocessing.Process):
     returned to the caller once traversing the directory is finished.
     '''
 
-    def __init__(self, **kwargs):
+    def __init__(self, opts, name, **kwargs):
         super(FSWorker, self).__init__()
-        self.path = kwargs['path']
-        self.pattern = kwargs['patt']
-        self.opts = kwargs.get('opts', None)
+        self.name = name
+        self.path = kwargs.get('path', None)
+        self.pattern = kwargs.get('patt', None)
+        self.opts = opts
         self.serial = salt.payload.Serial('msgpack')
         self.set_nice()
 
@@ -131,7 +132,7 @@ class FSWorker(multiprocessing.Process):
             socket.send(self.serial.dumps(data))
             ack = self.serial.loads(socket.recv())
             if ack == 'OK':
-                print "WORKER:  finished"
+                print "WORKER:  {0} finished".format(self.name)
         else:
             # directory does not exist, return empty result dict
             socket.send(self.serial.dumps({self.path: None}))
