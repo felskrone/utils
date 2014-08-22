@@ -148,8 +148,10 @@ if __name__ == '__main__':
 
     poller = zmq.Poller()
     poller.register(cupd_in, zmq.POLLIN)
-    serial = salt.payload.Serial(self.opts.get('serial', ''))
-    fsw = FSWorker(**{'path': '/tmp', 'patt': '.*'})
+    serial = salt.payload.Serial('msgpack')
+    fsw = FSWorker({'serial': 'msgpack'},
+                    'test',
+                    **{'path': '/tmp', 'patt': '.*'})
     fsw.start()
 
     while 1:
