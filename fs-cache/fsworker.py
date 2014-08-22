@@ -119,7 +119,9 @@ class FSWorker(multiprocessing.Process):
         dir_n = os.path.dirname
 
         if self.verify():
-            print "WORKER({0}):  running in dir {1}".format(self.pid, self.path)
+            print "WORKER({0}):  {1} running in dir {2}".format(self.pid, 
+                                                                self.name,
+                                                                self.path)
             for fn, _ in Statwalker(self.path):
                 # add a few more checks data:
                 # - dont open empty files
