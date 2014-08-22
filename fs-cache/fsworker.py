@@ -20,6 +20,13 @@ from re import match as rematch
 import time
 import sys
 
+# try importing psutil to set ionice-ness
+try:
+    raise ImportError
+    import psutil 
+except ImportError:
+    pass
+
 
 class Statwalker(object):
     '''
@@ -31,7 +38,6 @@ class Statwalker(object):
         self.stack = [directory]
         self.files = []
         self.index = 0
-        self.pid = os.getpid()
 
     def __getitem__(self, index):
         '''
@@ -73,6 +79,21 @@ class FSWorker(multiprocessing.Process):
         self.path = kwargs['path']
         self.pattern = kwargs['patt']
         self.serial = salt.payload.Serial('msgpack')
+        self.set_nice()
+
+    def set_nice(self):
+        '''
+        set the ionice-ness very low to harm the
+        disk as little as possible
+        '''
+       
+        # not all systems might have a recent enough psutils-package,
+        # but we try anyway to set it as low as possible
+        try:
+            self.proc = psutil.Process(os.getpid())
+            self.proc.set_ionice(psutil.IOPRIO_CLASS_IDLE)
+        except NameError:
+            pass
 
     def verify(self):
         '''
@@ -136,6 +157,6 @@ if __name__ == '__main__':
             reply = serial.loads(cupd_in.recv())
             print reply
             cupd_in.send(serial.dumps('OK'))
-            fsw.join()
         break
+    fsw.join()
     sys.exit(0)
