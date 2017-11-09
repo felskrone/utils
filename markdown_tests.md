@@ -5,24 +5,37 @@
   2. [Requirements](#requirements)
   3. [What does it do exactly?](#exactly)
       * [The templates and configs](#templates)
-      * [Configuration](#configs)
+      * [Configuration](#config)
       * [Testing pyconfd with your kubernetes-api](#testing)
   4. [Building and running the Container](#building)
   5. [Exposing non HTTP(S) Services](#exposing)
+  6. [Kubernetes Manifests](#manifest)
 
 
 # python-confd - What it does<a name="whatitdoes"></a>
-A Python-Client that retrieves kubernetes endpoints from its API, generates a HAProxy configuration file and restarts/reloads HAProxy only, if any changes were found.
+A containerized python-client that acts as an entrypoint to kubernetes cluster-services and makes them accessible to clients from outside the cluster with the need for a GCE/AWS-loadbalancer.
 
-See a [sample configuration](https://github.com/felskrone/python-confd/blob/master/haproxy.cfg.sample) generated which serves http, https and redis with endpoints retrieved from kubernetes.
+It does so by retrieving kubernetes-endpoints from the kubernetes-API, generating a HAPRoxy config and restarting/reloading HAProxy on changes. New kubernetes-services and/or backend-pods are automatically added and do not require updating any config by hand.
 
-### Another one? Why not use confd?
+See a generated [sample configuration](https://github.com/felskrone/python-confd/blob/master/haproxy.cfg.sample)  which serves http, https and redis with endpoints retrieved from kubernetes.
+
+Combined with Keepalived for a floating Service-IP it offers highly available clustered services outside AWS/GCE.
+
+![pyconfd with keepalived](https://github.com/felskrone/utils/blob/master/pyconfd_overview.svg)
+
+### Cant ingress do that as well?
+Yes, but the documentation is still lacking and has many lose ends. I could not get it to run.
+
+### Why not use confd?
 Because kubernetes stores its data in etcd in protobuf format (since 1.3?, before that it was plain text) and confd does not (yet) support protobuf. Also confd queries etcd directly while pyconfd queries the kubernetes-api which i consider a cleaner way of communicating with kubernetes. 
 
-Besides that conf would be fine, except that i do not know Go nor its text/template engine :-)
+Besides that confd would be fine, except that i do not know Go nor its text/template engine :-)
 
-### Requirements<a name="requirements"></a>
-A Kubernetes cluster with API-access and endpoints.
+
+## Requirements<a name="requirements"></a>
+A running kubernetes cluster with API-access and endpoints.
+
+If you want to use Keepalived, at least two designated HAProxy-nodes to float a service-ip inbetween. The nodes can also serve as normal kubernetes worker nodes, they are not limited to doing proxy work.
 
 
 ## What does it do exactly?<a name="exactly"></a>
@@ -275,4 +288,23 @@ frontend {{ domain }}
 {% endif %}
 {% endfor %}
 ```
+
+# Kubernetes Manifests<a name="manifests"></a>
+There are currently to manifests.
+
+**haproxy-controller.yaml** - It creates a replication controller which starts a pod on all nodes with the '*node_role=haproxy*'. If you labeled your nodes differently, make sure you update the manifest as well.
+
+**haproxy-service.yaml**
+
+For the HAProxy to work as a container a few things have to thought of.
+
+1. The HAProxy-templates currently bind to all interfaces by default. But the container-network-interface has got nothing to do with the nodes interfaces, but its the nodes interface(s) you actually want to listen on.
+
+If you start the container by hand, docker allows you to do that with something like
+
+```bash
+docker -p IP:host_port:container_port
+```
+
+In Kubernetes you will have to use a Service that does that for you.
 
