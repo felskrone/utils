@@ -5,11 +5,12 @@
   2. [Requirements](#requirements)
   3. [What does it do exactly?](#exactly)
       * [The templates and configs](#templates)
-      * [Configuration](#config)
-      * [Testing pyconfd with your kubernetes-api](#testing)
+      * [Exposing non HTTP(S) Services](#exposing)
+      * [Configuration options](#config)
+      * [Testing pyconfd with kubernetes-api](#testing)
   4. [Building and running the Container](#building)
-  5. [Exposing non HTTP(S) Services](#exposing)
-  6. [Kubernetes Manifests](#manifest)
+  5. [Kubernetes Manifests](#manifests)
+  6. [Keepalived floating IP](#floating)
 
 
 # python-confd - What it does<a name="whatitdoes"></a>
@@ -35,7 +36,9 @@ Besides that confd would be fine, except that i do not know Go nor its text/temp
 ## Requirements<a name="requirements"></a>
 A running kubernetes cluster with API-access and endpoints.
 
-If you want to use Keepalived, at least two designated HAProxy-nodes to float a service-ip inbetween. The nodes can also serve as normal kubernetes worker nodes, they are not limited to doing proxy work.
+A kube-dns-service which resolves 'kubernetes' to the kubernetes-services service-ip. Without DNS you will have to configure the domain manually.
+
+If you want to use Keepalived, at least two designated HAProxy-nodes to float a service-ip inbetween. The nodes can also serve as normal kubernetes worker nodes, they are not limited to doing proxy work. Technically you can float the service-ip between all worker-nodes but if thats what you want to do.
 
 
 ## What does it do exactly?<a name="exactly"></a>
@@ -158,6 +161,22 @@ backend bedashboard.k8s.cluster.com
 ...
 ```
 
+### Exposing non http(s)-service-endpoints<a name="exposing"></a>
+Works the very same way as http(s) endpoints, except that **proto** should be set to a keyword you look for in your template-files. To expose the redis-service with our HAProxy, annotate the redis-service with **proto=redis** and in your redis-service-template extract only the data you need. See below for the sample-jinja-code taken from ```04-redis.tmpl```.
+
+```
+{%- for domain, items in domains.items() %}
+{%- if items.proto == 'redis' %}
+{%- set var_name = domain|replace('.', '_') %}
+{% set be_name = 'be' + domain %}
+
+frontend {{ domain }}
+    bind *:6379
+    ...
+{% endif %}
+{% endfor %}
+```
+
 ## Configuration<a name="config"></a>
 The script can be either configured with commandline parameters or environment variables, not
 both at the same time. Supplying one parameter on the commandline disables environment awareness completely. I suggest using the parameters on the commandline for testing, once successful, transfer the configuration into your environment or ```docker -e``` parameters and run your container. For Kubernetes manifests see below.
@@ -273,22 +292,6 @@ Once the image is built and the Makefile updated (beware of spaces instead of th
 make daemon
 ```
 
-## Exposing non http(s)-service-endpoints<a name="exposing"></a>
-Works the very same way as http(s) endpoints, except that **proto** should be set to a keyword you look for in your template-files. To expose the redis-service with our HAProxy, annotate the redis-service with **proto=redis** and in your redis-service-template extract only the data you need. See below for the sample-jinja-code taken from ```04-redis.tmpl```.
-
-```
-{%- for domain, items in domains.items() %}
-{%- if items.proto == 'redis' %}
-{%- set var_name = domain|replace('.', '_') %}
-{% set be_name = 'be' + domain %}
-
-frontend {{ domain }}
-    bind *:6379
-    ...
-{% endif %}
-{% endfor %}
-```
-
 # Kubernetes Manifests<a name="manifests"></a>
 For running haproxy/pyconfd on kubernetes the two manifests can be used.
 
@@ -302,7 +305,12 @@ Containers can not bind to node interfaces/ips. Docker can do that with somethin
 docker -p IP:host_port:container_port
 ```
 
-but in kubernetes thats currently not possible (afaik). To make the services of the HAProxy available on the nodes keepalived-floating ip, we need a kubernetes-service which forwards the traffic for the floating ip to our haproxy.
+but in kubernetes thats currently not possible (afaik). To make the services of the HAProxy available on the nodes keepalived-floating ip, we need a kubernetes-service which forwards the traffic for the floating ip to our HAProxy.
 
 Make sure you update the the '**externalIP**' in haproxy-service.yaml to reflect your floating ip. Also make sure to have the selector only find the pods that are actually running haproxy/pyconfd by updating it if necessary.
 
+
+## Keepalived floating IP<a name='floating'></a>
+To get you started more easily,  [here's](https://github.com/felskrone/python-confd/blob/master/keepalived/keepalived.conf) is the config to float a service-ip between two (or more) nodes. Be sure to update all occurences of '<your_...>' with correct info.
+
+The failover-script referenced in the config also requires you to set the correct interface!
