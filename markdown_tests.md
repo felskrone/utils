@@ -1,16 +1,16 @@
 
 # Contents
 
-  1. [python-confd](#python-confd)
-  2. [Requirements](#Requirements)
+  1. [python-confd](#whatitdoes)
+  2. [Requirements](#requirements)
   3. 
 
-# python-confd - what it does
+# python-confd - What it does<a name="whatitdoes"></a>
 A Python-Client that retrieves kubernetes endpoints from its API, generates a HAProxy configuration file and restarts/reloads HAProxy only, if any changes were found.
 
 See a [sample configuration](https://github.com/felskrone/python-confd/blob/master/haproxy.cfg.sample) generated which serves http, https and redis with endpoints retrieved from kubernetes.
 
-## Requirements
+## Requirements<a name="requirements"></a>
 A Kubernetes cluster with API-access and endpoints.    
 
 ## Another one? Why not use confd?
