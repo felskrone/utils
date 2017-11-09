@@ -1,24 +1,31 @@
 
 # Contents
 
-  1. [python-confd](#whatitdoes)
+  1. [python-confd - What is does](#whatitdoes)
   2. [Requirements](#requirements)
-  3. 
+  3. [What does it do exactly?](#exactly)
+      * [The templates and configs](#templates)
+      * [Configuration](#configs)
+      * [Testing pyconfd with your kubernetes-api](#testing)
+  4. [Building and running the Container](#building)
+  5. [Exposing non HTTP(S) Services](#exposing)
+
 
 # python-confd - What it does<a name="whatitdoes"></a>
 A Python-Client that retrieves kubernetes endpoints from its API, generates a HAProxy configuration file and restarts/reloads HAProxy only, if any changes were found.
 
 See a [sample configuration](https://github.com/felskrone/python-confd/blob/master/haproxy.cfg.sample) generated which serves http, https and redis with endpoints retrieved from kubernetes.
 
-## Requirements<a name="requirements"></a>
-A Kubernetes cluster with API-access and endpoints.    
-
-## Another one? Why not use confd?
+### Another one? Why not use confd?
 Because kubernetes stores its data in etcd in protobuf format (since 1.3?, before that it was plain text) and confd does not (yet) support protobuf. Also confd queries etcd directly while pyconfd queries the kubernetes-api which i consider a cleaner way of communicating with kubernetes. 
 
 Besides that conf would be fine, except that i do not know Go nor its text/template engine :-)
 
-## What does it do exactly?
+### Requirements<a name="requirements"></a>
+A Kubernetes cluster with API-access and endpoints.
+
+
+## What does it do exactly?<a name="exactly"></a>
 The script queries the Kubernetes-API-endpoint ```http(s):<apihost>:<port>/api/v1/endpoints``` and retrieves all endpoints configured in kubernetes (this, hopefully in your setup, requires some kind of authentication, but thats out of scope for this documentation). The configured endpoints are mapped into a simplified python dictionary which is then passed into the templates.
 
 To have an endpoint present in the python-dict passed into the templates, it **_has_** to be annotated in kubernetes with the keywords **domain** and **proto**. If either is missing, the endpoint is ignored/skipped.
@@ -96,7 +103,7 @@ If i were to add an http-service like grafana with annotations like **domain=gra
 
 What you do with that data in your templates is up to you. See below what the default templates do.
 
-## The templates and configs
+### The templates and configs<a name="templates"></a>
 pyconfd supports two kinds of files in its template_dir. Templates named **\*.tmpl** and plain configs named **\*.conf**. If you require a certain order in which these files are processed, prefix them with digits like ```01-, 02-```, etc. Otherwise the order is whatever ```os.listdir()``` may return.
 
 **\*.conf** files are added to the generated configuration file as is, use them for static values only.
@@ -138,7 +145,7 @@ backend bedashboard.k8s.cluster.com
 ...
 ```
 
-## Configuration
+## Configuration<a name="config"></a>
 The script can be either configured with commandline parameters or environment variables, not
 both at the same time. Supplying one parameter on the commandline disables environment awareness completely. I suggest using the parameters on the commandline for testing, once successful, transfer the configuration into your environment or ```docker -e``` parameters and run your container.
 
@@ -186,7 +193,7 @@ The same variables are supported when set in the environment.
 | HAPROXY_RELOAD_CMD| /bin/systemctl reload-or-restart haproxy |
 
 
-## Testing pyconfd with your kubernetes-api
+### Testing pyconfd with your kubernetes-api<a name="testing"></a>
 All examples assume a debian-stretch-default HAPRoxy installation and systemd. Adjust
 **--haproxy-\*** parameters accordingly if your setup differs.
 
@@ -217,7 +224,7 @@ Same as above, but try multiple API-servers in order or appearance
 ```
 Once the tests are finished, update the Makefile to suite your needs.
 
-## Building and starting the container
+## Building and running the container<a name="building"></a>
 Depending on your kubernetes-setup, update the SSL-files in ./src/etc/pyconfd/*.pem with proper
 SSL-key, SSL-cert and CA information. This repo only contains empty dummy files to successfully build the container image. If you dont set ```SSL_KEY_FILE``` or ```SSL_CERT_FILE``` the dummy files will be ignored anyway.
 
@@ -253,7 +260,7 @@ Once the image is built and the Makefile updated (beware of spaces instead of th
 make daemon
 ```
 
-## Exposing non http(s)-service-endpoints
+## Exposing non http(s)-service-endpoints<a name="exposing"></a>
 Works the very same way as http(s) endpoints, except that **proto** should be set to a keyword you look for in your template-files. To expose the redis-service with our HAProxy, annotate the redis-service with **proto=redis** and in your redis-service-template extract only the data you need. See below for the sample-jinja-code taken from ```04-redis.tmpl```.
 
 ```
