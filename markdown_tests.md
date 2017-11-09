@@ -1,7 +1,7 @@
 
 # Contents
 
-  1. [python-confd - What is does](#whatitdoes)
+  1. [python-confd - What it does](#whatitdoes)
   2. [Requirements](#requirements)
   3. [What does it do exactly?](#exactly)
       * [The templates and configs](#templates)
@@ -13,7 +13,7 @@
 
 
 # python-confd - What it does<a name="whatitdoes"></a>
-A containerized python-client that acts as an entrypoint to kubernetes cluster-services and makes them accessible to clients from outside the cluster with the need for a GCE/AWS-loadbalancer.
+A containerized python-client that acts as an entrypoint to kubernetes cluster-services and makes them accessible to clients from outside the cluster without the need for a GCE/AWS-loadbalancer.
 
 It does so by retrieving kubernetes-endpoints from the kubernetes-API, generating a HAPRoxy config and restarting/reloading HAProxy on changes. New kubernetes-services and/or backend-pods are automatically added and do not require updating any config by hand.
 
@@ -146,7 +146,7 @@ backend begrafana_k8s_cluster_com
     server 10_244_0_77 10.244.0.77:3000 check
 ```
 
-As you can see, the **domain** field from the kubernetes annotation is converted into an variable and used to map frontend-http-requests to the corresponding http-backend. Any additional kubernetes-endpoint with **proto=http** would transfer into an additional ACL-Line and a standalone backend. The very same applies to **proto=https**, except that the ACL-line checks for the SNI-header instead of the HOST-header.
+As you can see, the **domain** field from the kubernetes annotation is converted into an variable and used to map frontend-http-requests to the corresponding http-backend. Any additional kubernetes-endpoint with **proto=http** would transflate into an additional ACL-Line and a standalone backend. The very same applies to **proto=https**, except that the ACL-line checks for the SNI-header instead of the HOST-header.
 ```
 ...
 acl dashboard_k8s_cluster_com req.ssl_sni -i dashboard.k8s.cluster.com
@@ -160,7 +160,7 @@ backend bedashboard.k8s.cluster.com
 
 ## Configuration<a name="config"></a>
 The script can be either configured with commandline parameters or environment variables, not
-both at the same time. Supplying one parameter on the commandline disables environment awareness completely. I suggest using the parameters on the commandline for testing, once successful, transfer the configuration into your environment or ```docker -e``` parameters and run your container.
+both at the same time. Supplying one parameter on the commandline disables environment awareness completely. I suggest using the parameters on the commandline for testing, once successful, transfer the configuration into your environment or ```docker -e``` parameters and run your container. For Kubernetes manifests see below.
 
 ```
   --ssl-key [SSL_KEY_FILE]
@@ -290,21 +290,19 @@ frontend {{ domain }}
 ```
 
 # Kubernetes Manifests<a name="manifests"></a>
-There are currently to manifests.
+For running haproxy/pyconfd on kubernetes the two manifests can be used.
 
-**haproxy-controller.yaml** - It creates a replication controller which starts a pod on all nodes with the '*node_role=haproxy*'. If you labeled your nodes differently, make sure you update the manifest as well.
+**[haproxy-controller.yaml](https://github.com/felskrone/python-confd/blob/master/k8s/haproxy-controller.yaml)** - Creates a replication controller which starts a pod on all nodes with the '*node_role=haproxy*'. That nodes should be the ones running keepalived with the floating ip. If you labeled your nodes differently or not at all, make sure you the replication-controller is able to find your pods.
 
-**haproxy-service.yaml**
+**[haproxy-service.yaml](https://github.com/felskrone/python-confd/blob/master/k8s/haproxy-service.yaml)**
 
-For the HAProxy to work as a container a few things have to thought of.
-
-1. The HAProxy-templates currently bind to all interfaces by default. But the container-network-interface has got nothing to do with the nodes interfaces, but its the nodes interface(s) you actually want to listen on.
-
-If you start the container by hand, docker allows you to do that with something like
+Containers can not bind to node interfaces/ips. Docker can do that with something like
 
 ```bash
 docker -p IP:host_port:container_port
 ```
 
-In Kubernetes you will have to use a Service that does that for you.
+but in kubernetes thats currently not possible (afaik). To make the services of the HAProxy available on the nodes keepalived-floating ip, we need a kubernetes-service which forwards the traffic for the floating ip to our haproxy.
+
+Make sure you update the the '**externalIP**' in haproxy-service.yaml to reflect your floating ip. Also make sure to have the selector only find the pods that are actually running haproxy/pyconfd by updating it if necessary.
 
